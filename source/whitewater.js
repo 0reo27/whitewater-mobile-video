@@ -642,7 +642,7 @@ function Whitewater(canvas, inputPath, options) {
         Video.state = 'ready';
 
         var stopEvent = new CustomEvent('whitewaterend', getEventOptions());
-        Video.canvas.dispatchEvent(stopEvent);
+        // Video.canvas.dispatchEvent(stopEvent);
 
         cancelAnimationFrame(animationFrame);
 
