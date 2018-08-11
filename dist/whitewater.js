@@ -1,101 +1,130 @@
 // Whitewater object
 function Whitewater(canvas, inputPath, options) {
-    "use strict";
+    'use strict';
 
-
-    var context         = null;
-    var imageIndex      = 0;
-    var coordinates     = {x: 0, y: 0};
-    var imagesLoaded    = 0;
-    var firstImage      = new Image();
-    var diffImages      = [];
-    var animationFrame  = null;
-    var frames          = null;
-    var manifest        = null;
-    var path            = '';
-    var settings        = {};
+    var context = null;
+    var imageIndex = 0;
+    var coordinates = {
+        x: 0,
+        y: 0
+    };
+    var imagesLoaded = 0;
+    var firstImage = new Image();
+    var diffImages = [];
+    var animationFrame = null;
+    var frames = null;
+    var manifest = null;
+    var path = '';
+    var settings = {};
 
     // Page Visibility API compatibility
-    var hiddenProperty  = null;
-    var documentHidden  = false;
+    var hiddenProperty = null;
+    var documentHidden = false;
 
+    // Buffer
+    var buffer = null;
+    var bufferContext = null;
 
     // Public members
-
-    this.state          = 'loading';
-    this.currentFrame   = 0;
-    this.progress       = 0;
-    this.timestamp      = '00:00.000';
-    this.maxTime        = '00:00.000';
+    this.state = 'loading';
+    this.currentFrame = 0;
+    this.progress = 0;
+    this.timestamp = '00:00.000';
+    this.maxTime = '00:00.000';
     this.secondsElapsed = 0.0;
-
-
-    // Check dependencies and initialize video
-
-    if (Whitewater.supported) {
-        init.call(this);
-    }
-
 
     // ---------------------------------------------------------------------- //
 
-
     // Private Functions
 
-    function addCanvasMethods() {
+    var addCanvasMethods = function() {
         this.canvas.play = this.play;
         this.canvas.pause = this.pause;
         this.canvas.playpause = this.playpause;
         this.canvas.stop = this.stop;
-    }
+    }.bind(this);
 
-    function addVisibilityListener() {
+    var addVisibilityListener = function() {
         if ('hidden' in document) {
             hiddenProperty = 'hidden';
-            document.addEventListener('visibilitychange', softPause.bind(this), false);
+            document.addEventListener(
+                'visibilitychange',
+                softPause.bind(this),
+                false
+            );
         } else if ('mozHidden' in document) {
             hiddenProperty = 'mozHidden';
-            document.addEventListener('mozvisibilitychange', softPause.bind(this), false);
+            document.addEventListener(
+                'mozvisibilitychange',
+                softPause.bind(this),
+                false
+            );
         } else if ('msHidden' in document) {
             hiddenProperty = 'msHidden';
-            document.addEventListener('msvisibilitychange', softPause.bind(this), false);
+            document.addEventListener(
+                'msvisibilitychange',
+                softPause.bind(this),
+                false
+            );
         } else if ('webkitHidden' in document) {
             hiddenProperty = 'webkitHidden';
-            document.addEventListener('webkitvisibilitychange', softPause.bind(this), false);
+            document.addEventListener(
+                'webkitvisibilitychange',
+                softPause.bind(this),
+                false
+            );
         } else if ('onfocusin' in document) {
-            document.addEventListener('focusin', softPause.bind(this, false), false);
-            document.addEventListener('focusout', softPause.bind(this, true), false);
+            document.addEventListener(
+                'focusin',
+                softPause.bind(this, false),
+                false
+            );
+            document.addEventListener(
+                'focusout',
+                softPause.bind(this, true),
+                false
+            );
         } else if ('onpageshow' in window) {
-            window.addEventListener('pageshow', softPause.bind(this, false), false);
-            window.addEventListener('pagehide', softPause.bind(this, true), false);
+            window.addEventListener(
+                'pageshow',
+                softPause.bind(this, false),
+                false
+            );
+            window.addEventListener(
+                'pagehide',
+                softPause.bind(this, true),
+                false
+            );
         } else {
-            window.addEventListener('focus', softPause.bind(this, false), false);
+            window.addEventListener(
+                'focus',
+                softPause.bind(this, false),
+                false
+            );
             window.addEventListener('blur', softPause.bind(this, true), false);
         }
-    }
+    }.bind(this);
 
-    function checkImagesLoaded() {
-
+    var checkImagesLoaded = function() {
         imagesLoaded++;
 
         if (imagesLoaded > settings.imagesRequired) {
-
             this.canvas.setAttribute('data-state', 'ready');
             this.state = 'ready';
 
-            var loadEvent = new CustomEvent('whitewaterload', getEventOptions.call(this));
+            var loadEvent = new CustomEvent(
+                'whitewaterload',
+                getEventOptions()
+            );
             this.canvas.dispatchEvent(loadEvent);
 
             if (options.autoplay) {
                 this.play();
             }
-
         }
+    }.bind(this);
 
-    }
-
-    function drawFrame() {
-
+    var drawFrame = function() {
         var frameToDraw = null;
 
         if (this.currentFrame === 0) {
@@ -106,31 +135,32 @@ function Whitewater(canvas, inputPath, options) {
 
         context.drawImage(frameToDraw, 0, 0);
         this.currentFrame++;
-        setProgress.call(this);
+        setProgress();
+    }.bind(this);
 
-    }
-
-    function getEventOptions() {
+    var getEventOptions = function() {
         return {
-    		detail: {
-        		video: this,
-    			currentFrame: this.currentFrame,
-    			progress: this.progress,
-    			timestamp: this.timestamp,
-    			maxTime: this.maxTime,
-    			state: this.state,
-    			secondsElapsed: this.secondsElapsed
+            detail: {
+                video: this,
+                currentFrame: this.currentFrame,
+                progress: this.progress,
+                timestamp: this.timestamp,
+                maxTime: this.maxTime,
+                state: this.state,
+                secondsElapsed: this.secondsElapsed
             },
-    		bubbles: true,
-    		cancelable: false
-    	};
-    }
+            bubbles: true,
+            cancelable: false
+        };
+    }.bind(this);
 
-    function getPrecompositedFrame(frameToRender) {
-
-        var buffer = document.createElement('canvas');
-        buffer.width = settings.videoWidth;
-        buffer.height = settings.videoHeight;
+    var getPrecompositedFrame = function(frameToRender) {
+        bufferContext.clearRect(
+            0,
+            0,
+            settings.videoWidth,
+            settings.videoHeight
+        );
 
         for (var j = 0; j < frameToRender.length; j++) {
             var position = frameToRender[j][0];
@@ -138,7 +168,7 @@ function Whitewater(canvas, inputPath, options) {
             var positionArray = getCoordinatesFromPosition(position);
             var chunkWidth = consecutive * settings.blockSize;
 
-            buffer.getContext('2d').drawImage(
+            bufferContext.drawImage(
                 diffImages[imageIndex],
                 coordinates.x * settings.blockSize,
                 coordinates.y * settings.blockSize,
@@ -160,27 +190,32 @@ function Whitewater(canvas, inputPath, options) {
                     coordinates.y = 0;
                     imageIndex++;
                     if (imageIndex >= diffImages.length) {
-                        throw 'imageIndex exceeded diffImages.length\n\nmapLength = ' + frameToRender.length + '\nj = ' + j;
+                        throw 'imageIndex exceeded diffImages.length\n\nmapLength = ' +
+                            frameToRender.length +
+                            '\nj = ' +
+                            j;
                     }
                 }
             }
         }
 
         return buffer;
+    };
 
-    }
-
-    function loadRequiredImages() {
-        var Video = this;
-        firstImage.addEventListener('load', function() {
-            checkImagesLoaded.call(Video);
-            setPosterImage.call(Video);
-        }, false);
+    var loadRequiredImages = function() {
+        firstImage.addEventListener(
+            'load',
+            function() {
+                checkImagesLoaded();
+                setPosterImage();
+            },
+            false
+        );
         firstImage.src = path + 'first.' + settings.format;
 
         for (var i = 1; i <= settings.imagesRequired; i++) {
             var image = new Image();
-            image.addEventListener('load', checkImagesLoaded.bind(this), false);
+            image.addEventListener('load', checkImagesLoaded, false);
             if (i > 99) {
                 image.src = path + 'diff_' + i + '.' + settings.format;
             } else if (i > 9) {
@@ -190,93 +225,82 @@ function Whitewater(canvas, inputPath, options) {
             }
             diffImages.push(image);
         }
+    }.bind(this);
 
-    }
-
-    function parseManifestFile(callbacks) {
-
-        var Video = this;
+    var parseManifestFile = function(callbacks) {
         var request = new XMLHttpRequest();
 
-        request.open('GET', path + 'manifest.json', false);
+        request.open('GET', path + 'manifest.json', true);
         request.addEventListener('load', onManifestLoad.bind(this), false);
         request.addEventListener('error', onManifestError.bind(this), false);
         request.send();
 
         function onManifestLoad() {
-
             try {
                 manifest = JSON.parse(request.responseText);
-            } catch(error) {
+            } catch (error) {
                 this.constructor._throwError(error);
                 return;
             }
 
-            setVideoOptions.call(this);
-            setSize.call(this);
+            setVideoOptions();
+            setSize();
 
             var myWorker = null;
 
             var webWorker = function() {
                 var workerIsIncluded = false;
-                
-                    workerIsIncluded = true;
 
-                    onmessage = function(e) {
-                        var frames = e.data;
-                        var videoData = [];
+                workerIsIncluded = true;
 
-                        for (var i = 0; i < frames.length; i++) {
-                            var frame = frames[i];
-                            var frameData = [];
+                onmessage = function(e) {
+                    var frames = e.data;
+                    var videoData = [];
 
-                            if (frame !== "") {
-                                var map = frame.match(/.{1,5}/g);
-                                var mapLength = map.length;
+                    for (var i = 0; i < frames.length; i++) {
+                        var frame = frames[i];
+                        var frameData = [];
 
-                                for (var j = 0; j < mapLength; j++) {
-                                    var position = toBase10(map[j].substr(0, 3));
-                                    var consecutive = toBase10(map[j].substr(3, 2));
+                        if (frame !== '') {
+                            var map = frame.match(/.{1,5}/g);
+                            var mapLength = map.length;
 
-                                    frameData.push([position, consecutive]);
-                                }
+                            for (var j = 0; j < mapLength; j++) {
+                                var position = toBase10(map[j].substr(0, 3));
+                                var consecutive = toBase10(map[j].substr(3, 2));
+
+                                frameData.push([position, consecutive]);
                             }
-
-                            videoData.push(frameData);
                         }
 
-                        postMessage(videoData);
-                    };
-
-                    function toBase10(val) {
-                        var order = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-                        var num = 0, r;
-                        while (val.length) {
-                            r = order.indexOf(val.charAt(0));
-                            val = val.substr(1);
-                            num *= 64;
-                            num += r;
-                        }
-                        return num;
+                        videoData.push(frameData);
                     }
+
+                    postMessage(videoData);
+                };
+
+                function toBase10(val) {
+                    var order =
+                        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+                    var num = 0,
+                        r;
+                    while (val.length) {
+                        r = order.indexOf(val.charAt(0));
+                        val = val.substr(1);
+                        num *= 64;
+                        num += r;
+                    }
+                    return num;
+                }
 
                 return workerIsIncluded;
             };
 
-            if (webWorker()) {
-
-                var URL = window.URL || window.webkitURL;
-                var workerBlob = new Blob(['(' + webWorker.toString() + ')()'], {
-                    type: 'text/javascript'
-                });
-
-                myWorker = new Worker(URL.createObjectURL(workerBlob));
-
-            } else {
-
-                myWorker = new Worker('whitewater.worker.js');
-
-            }
+            var URL = window.URL || window.webkitURL;
+            var workerBlob = new Blob(['(' + webWorker.toString() + ')()'], {
+                type: 'text/javascript'
+            });
+            myWorker = new Worker(URL.createObjectURL(workerBlob));
 
             myWorker.postMessage(manifest.frames);
 
@@ -289,49 +313,42 @@ function Whitewater(canvas, inputPath, options) {
                 }
 
                 if (options.controls) {
-                    setPlayPauseControls.call(Video);
+                    setPlayPauseControls();
                 }
             };
-
         }
 
         function onManifestError() {
-
             try {
                 throw this.constructor.errors.MANIFEST;
-            } catch(error) {
+            } catch (error) {
                 this.constructor._throwError(error);
                 return;
             }
-
         }
+    }.bind(this);
 
-    }
-
-    function resetVideo() {
-
-        imageIndex          = 0;
-        coordinates.x       = 0;
-        coordinates.y       = 0;
-        this.currentFrame   = 0;
+    var resetVideo = function() {
+        imageIndex = 0;
+        coordinates.x = 0;
+        coordinates.y = 0;
+        this.currentFrame = 0;
 
         context.clearRect(0, 0, settings.videoWidth, settings.videoHeight);
+    }.bind(this);
 
-    }
-
-    function setCanvasElement() {
-
+    var setCanvasElement = function() {
         if (canvas instanceof HTMLCanvasElement) {
             this.canvas = canvas;
             context = this.canvas.getContext('2d');
+            buffer = document.createElement('canvas');
+            bufferContext = buffer.getContext('2d');
         } else {
             throw this.constructor.errors.CANVAS;
         }
+    }.bind(this);
 
-    }
-
-    function setFilePath() {
-
+    var setFilePath = function() {
         if (typeof inputPath === 'string') {
             path = inputPath;
             if (inputPath.substr(-1) !== '/') {
@@ -340,13 +357,10 @@ function Whitewater(canvas, inputPath, options) {
         } else {
             throw this.constructor.errors.PATH;
         }
+    };
 
-    }
-
-    function setOptions() {
-
+    var setOptions = function() {
         if (options) {
-
             var speed = 1;
             if (options.speed && options.speed < 1) {
                 speed = options.speed;
@@ -358,12 +372,10 @@ function Whitewater(canvas, inputPath, options) {
                 controls: options.controls || false,
                 speed: speed
             };
-
         }
+    };
 
-    }
-
-    function setPlayPauseControls() {
+    var setPlayPauseControls = function() {
         var element = this.canvas;
 
         if (typeof options.controls !== 'boolean') {
@@ -372,37 +384,40 @@ function Whitewater(canvas, inputPath, options) {
 
         var clickEvent = getClickEvent();
         element.addEventListener(clickEvent, this.playpause);
-    }
+    }.bind(this);
 
-    function setPosterImage() {
-
+    var setPosterImage = function() {
         var src = firstImage.src;
         var top = this.canvas.style.paddingTop;
 
-        this.canvas.style.background = 'transparent url(' + src + ') no-repeat center ' + top;
+        this.canvas.style.background =
+            'transparent url(' + src + ') no-repeat center ' + top;
         this.canvas.style.backgroundSize = 'contain';
+    }.bind(this);
 
-    }
-
-    function setProgress() {
-
-        this.progress = getNumberWithDecimals(this.currentFrame / settings.frameCount * 100, 3);
+    var setProgress = function() {
+        this.progress = getNumberWithDecimals(
+            (this.currentFrame / settings.frameCount) * 100,
+            3
+        );
 
         var currentTime = this.currentFrame / settings.framesPerSecond;
         this.timestamp = getFormattedTime(currentTime);
         this.secondsElapsed = getNumberWithDecimals(currentTime, 3);
 
-        var playingEvent = new CustomEvent('whitewaterprogressupdate', getEventOptions.call(this));
-        this.canvas.dispatchEvent(playingEvent);
+        // XXX: disabled progress event
+        // var playingEvent = new CustomEvent('whitewaterprogressupdate', getEventOptions());
+        // this.canvas.dispatchEvent(playingEvent);
+    }.bind(this);
 
-    }
-
-    function setSize() {
+    var setSize = function() {
         this.canvas.setAttribute('width', settings.videoWidth + 'px');
         this.canvas.setAttribute('height', settings.videoHeight + 'px');
-    }
+        buffer.width = settings.videoWidth;
+        buffer.height = settings.videoHeight;
+    }.bind(this);
 
-    function setVideoOptions() {
+    var setVideoOptions = function() {
         var format = '';
 
         switch (manifest.format) {
@@ -433,55 +448,54 @@ function Whitewater(canvas, inputPath, options) {
 
         var lengthInSeconds = settings.frameCount / settings.framesPerSecond;
         this.maxTime = getFormattedTime(lengthInSeconds);
-    }
+    }.bind(this);
 
-    function softPause(hidden) {
+    var softPause = function(hidden) {
         if (hidden !== undefined) {
             documentHidden = hidden;
         }
 
-        if ((document[hiddenProperty] || documentHidden === true) && Video.state === 'playing') {
+        if (
+            (document[hiddenProperty] || documentHidden === true) &&
+            Video.state === 'playing'
+        ) {
             this.state = 'suspended';
             this.pause();
         } else if (Video.state === 'suspended') {
             this.play();
         }
-    }
+    };
 
-    function init() {
+    var init = function() {
         try {
-            setCanvasElement.call(this);
+            setCanvasElement();
             setFilePath();
             setOptions();
 
             var callAfterManifest = [
-                loadRequiredImages.bind(this),
-                addCanvasMethods.bind(this),
-                addVisibilityListener.bind(this)
+                loadRequiredImages,
+                addCanvasMethods,
+                addVisibilityListener
             ];
 
-            parseManifestFile.call(this, callAfterManifest);
-
-        } catch(error) {
+            parseManifestFile(callAfterManifest);
+        } catch (error) {
             this.constructor._throwError(error);
             return;
         }
-
-    }
-
+    }.bind(this);
 
     // Helper Functions
 
-    function getClickEvent() {
+    var getClickEvent = function() {
         var isTouchDevice = 'ontouchstart' in document.documentElement;
-        //var startEvent = isTouchDevice ? 'touchstart' : 'mousedown';
+        // var startEvent = isTouchDevice ? 'touchstart' : 'mousedown';
         var endEvent = isTouchDevice ? 'touchend' : 'mouseup';
 
         return endEvent;
-    }
+    };
 
-    function getCoordinatesFromPosition(position) {
-
+    var getCoordinatesFromPosition = function(position) {
         var coordinates = [];
         var columns = Math.ceil(settings.videoWidth / settings.blockSize);
 
@@ -492,38 +506,34 @@ function Whitewater(canvas, inputPath, options) {
         }
 
         return coordinates;
+    };
 
-    }
-
-    function getFormattedTime(time) {
-
+    var getFormattedTime = function(time) {
         var minutes = Math.floor(time / 60);
         var seconds = Math.floor(time % 60);
-        var milliseconds = Math.floor((time % 60 % 1) * 1000);
+        var milliseconds = Math.floor(((time % 60) % 1) * 1000);
 
         if (minutes < 10) {
             minutes = '0' + minutes;
         }
 
         if (seconds < 10) {
-            seconds  = '0' + seconds;
+            seconds = '0' + seconds;
         }
 
         if (milliseconds < 10) {
-            milliseconds  = '00' + milliseconds;
+            milliseconds = '00' + milliseconds;
         } else if (milliseconds < 100) {
-            milliseconds  = '0' + milliseconds;
+            milliseconds = '0' + milliseconds;
         }
 
         return minutes + ':' + seconds + '.' + milliseconds;
+    };
 
-    }
-
-    function getNumberWithDecimals(number, digits) {
+    var getNumberWithDecimals = function(number, digits) {
         var multiplier = Math.pow(10, digits);
         return Math.round(number * multiplier) / multiplier;
-    }
-
+    };
 
     // Public Functions
 
@@ -538,7 +548,10 @@ function Whitewater(canvas, inputPath, options) {
             Video.canvas.setAttribute('data-state', 'paused');
             Video.state = 'paused';
 
-            var pauseEvent = new CustomEvent('whitewaterpause', getEventOptions.call(Video));
+            var pauseEvent = new CustomEvent(
+                'whitewaterpause',
+                getEventOptions()
+            );
             Video.canvas.dispatchEvent(pauseEvent);
         }
 
@@ -549,7 +562,7 @@ function Whitewater(canvas, inputPath, options) {
         if (Video.state === 'playing') {
             return;
         } else if (Video.state === 'ended') {
-            resetVideo.call(Video);
+            resetVideo();
         }
 
         var resume = Video.state === 'suspended';
@@ -558,59 +571,61 @@ function Whitewater(canvas, inputPath, options) {
         Video.state = 'playing';
 
         if (!resume) {
-            var playEvent = new CustomEvent('whitewaterplay', getEventOptions.call(Video));
+            var playEvent = new CustomEvent(
+                'whitewaterplay',
+                getEventOptions()
+            );
             Video.canvas.dispatchEvent(playEvent);
         }
 
-        var milliseconds = 1 / settings.framesPerSecond * 1000;
+        var milliseconds = (1 / settings.framesPerSecond) * 1000;
         var interval = getNumberWithDecimals(milliseconds / options.speed, 2);
         var previousTime = window.performance.now();
 
         animate(previousTime);
 
         function animate(currentTime) {
-
             var timeSinceLastDraw = currentTime - previousTime;
 
             if (timeSinceLastDraw >= interval) {
-
                 if (Video.currentFrame < settings.frameCount + 1) {
-
-                    drawFrame.call(Video);
-
+                    drawFrame();
                 } else if (options.loop) {
+                    resetVideo();
+                    drawFrame();
 
-                    resetVideo.call(Video);
-                    drawFrame.call(Video);
-
-                    var loopEvent = new CustomEvent('whitewaterloop', getEventOptions.call(Video));
+                    var loopEvent = new CustomEvent(
+                        'whitewaterloop',
+                        getEventOptions()
+                    );
                     Video.canvas.dispatchEvent(loopEvent);
-
                 } else {
-
                     Video.stop();
 
                     Video.canvas.setAttribute('data-state', 'ended');
                     Video.state = 'ended';
 
-                    var endEvent = new CustomEvent('whitewaterend', getEventOptions.call(Video));
+                    var endEvent = new CustomEvent(
+                        'whitewaterend',
+                        getEventOptions()
+                    );
                     Video.canvas.dispatchEvent(endEvent);
-
                 }
 
                 var lag = timeSinceLastDraw - interval;
                 previousTime = currentTime - lag;
-
             }
 
-            if (!(document[hiddenProperty] || documentHidden === true) && Video.state === 'playing') {
+            if (
+                !(document[hiddenProperty] || documentHidden === true) &&
+                Video.state === 'playing'
+            ) {
                 animationFrame = requestAnimationFrame(animate);
             }
         }
     };
 
     this.playpause = function() {
-
         if (Video.state === 'playing') {
             Video.pause();
         } else if (Video.state !== 'loading') {
@@ -619,7 +634,6 @@ function Whitewater(canvas, inputPath, options) {
     };
 
     this.stop = function() {
-
         if (Video.state === 'ready') {
             return;
         }
@@ -627,27 +641,32 @@ function Whitewater(canvas, inputPath, options) {
         Video.canvas.setAttribute('data-state', 'ready');
         Video.state = 'ready';
 
-        var stopEvent = new CustomEvent('whitewaterend', getEventOptions.call(Video));
+        var stopEvent = new CustomEvent('whitewaterend', getEventOptions());
         Video.canvas.dispatchEvent(stopEvent);
 
         cancelAnimationFrame(animationFrame);
 
-        resetVideo.call(Video);
-        setProgress.call(Video);
-
+        resetVideo();
+        setProgress();
     };
 
+    // Check dependencies and initialize video
+
+    if (Whitewater.supported) {
+        init();
+    }
 }
 
 Whitewater.errors = {
-    pre             : 'Whitewater: ',
-    MISC            : 'Whatever.',
-    WEBWORKERS      : 'This browser does not support Web Workers.',
-    BLOBCONSTRUCTOR : 'This browser does not support the Blob() constructor.',
-    VISIBILITYAPI   : 'This browser does not support the Visiblity API',
-    CANVAS          : '"canvas" must be a valid HTML canvas element.',
-    PATH            : '"path" must be a path to a directory containing a manifest.json file',
-    MANIFEST        : 'A manifest.json file could not be found.'
+    pre: 'Whitewater: ',
+    MISC: 'Whatever.',
+    WEBWORKERS: 'This browser does not support Web Workers.',
+    BLOBCONSTRUCTOR: 'This browser does not support the Blob() constructor.',
+    VISIBILITYAPI: 'This browser does not support the Visiblity API',
+    CANVAS: '"canvas" must be a valid HTML canvas element.',
+    PATH:
+        '"path" must be a path to a directory containing a manifest.json file',
+    MANIFEST: 'A manifest.json file could not be found.'
 };
 
 Whitewater._checkSupport = function() {
@@ -656,15 +675,19 @@ Whitewater._checkSupport = function() {
             throw this.errors.WEBWORKERS;
         } else if (!window.Worker) {
             throw this.errors.BLOBCONSTRUCTOR;
-        } else if (!(('hidden' in document) ||
-                     ('mozHidden' in document) ||
-                     ('msHidden' in document) ||
-                     ('webkitHidden' in document))) {
+        } else if (
+            !(
+                'hidden' in document ||
+                'mozHidden' in document ||
+                'msHidden' in document ||
+                'webkitHidden' in document
+            )
+        ) {
             throw this.errors.VISIBILITYAPI;
         } else {
             return true;
         }
-    } catch(error) {
+    } catch (error) {
         this._throwError(error);
         return false;
     }
